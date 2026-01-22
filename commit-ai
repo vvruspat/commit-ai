@@ -256,7 +256,7 @@ print(message)
 
 summary="${summary_and_message%%$'\n<<<SPLIT>>>'*}"
 message="${summary_and_message##*$'\n<<<SPLIT>>>'}"
-message="$(printf '%s' "$message" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+message="$(printf '%s' "$message" | tr '\n\r' ' ' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 message="$(
   COMMIT_MESSAGE="$message" \
   python3 -c '
