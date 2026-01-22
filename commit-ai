@@ -92,20 +92,30 @@ fi
 if [[ -z "$commit_type" ]]; then
   echo "Select type:"
   PS3="Type number: "
-  select choice in fix chore feature; do
-    if [[ -n "${choice:-}" ]]; then
-      commit_type="$choice"
-      break
-    fi
-    echo "Invalid selection."
+  select choice in fix chore feature custom; do
+    case "${choice:-}" in
+      fix|chore|feature)
+        commit_type="$choice"
+        break
+        ;;
+      custom)
+        read -r -p "Custom type: " commit_type
+        break
+        ;;
+      *)
+        echo "Invalid selection."
+        ;;
+    esac
   done
 fi
 
 case "$commit_type" in
   fix|chore|feature) ;;
   *)
-    echo "Invalid type: $commit_type (use fix|chore|feature)" >&2
-    exit 1
+    if [[ -z "$commit_type" ]]; then
+      echo "Invalid type: empty value" >&2
+      exit 1
+    fi
     ;;
 esac
 
