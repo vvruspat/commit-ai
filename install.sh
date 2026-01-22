@@ -11,7 +11,24 @@ if [[ -f "$rc_path" ]]; then
 else
   echo "Commit AI install"
   read -r -p "Server URL [$default_server]: " server
-  read -r -p "Model [$default_model]: " model
+  echo "Select model:"
+  PS3="Model number: "
+  select choice in gpt-4o-mini gpt-4o custom; do
+    case "${choice:-}" in
+      gpt-4o-mini|gpt-4o)
+        model="$choice"
+        break
+        ;;
+      custom)
+        read -r -p "Custom model [$default_model]: " model
+        model="${model:-$default_model}"
+        break
+        ;;
+      *)
+        echo "Invalid selection."
+        ;;
+    esac
+  done
   read -r -p "API key: " api_key
 
   server="${server:-$default_server}"
