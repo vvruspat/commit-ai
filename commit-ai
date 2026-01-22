@@ -84,11 +84,21 @@ fi
 branch="$(git rev-parse --abbrev-ref HEAD)"
 jira="$(echo "$branch" | grep -Eo '[A-Z]+-[0-9]+' | head -n 1 || true)"
 if [[ -z "$jira" ]]; then
-  read -r -p "Jira key (e.g. COOL-1234): " jira
+  while [[ -z "$jira" ]]; do
+    read -r -p "Jira key (e.g. COOL-1234): " jira
+  done
 fi
 
 if [[ -z "$commit_type" ]]; then
-  read -r -p "Type (fix/chore/feature): " commit_type
+  echo "Select type:"
+  PS3="Type number: "
+  select choice in fix chore feature; do
+    if [[ -n "${choice:-}" ]]; then
+      commit_type="$choice"
+      break
+    fi
+    echo "Invalid selection."
+  done
 fi
 
 case "$commit_type" in
@@ -128,6 +138,21 @@ scope = os.environ["COMMIT_SCOPE"]
 content = f"{prompt}\n\nChanges ({scope}):\n{diff}"
 print(json.dumps({
   "model": model,
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "commit_message",
+      "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+          "summary": {"type": "string"},
+          "message": {"type": "string"}
+        },
+        "required": ["summary", "message"]
+      }
+    }
+  },
   "messages": [
     {"role": "user", "content": content}
   ],
@@ -144,18 +169,49 @@ response="$(
     "$endpoint"
 )"
 
+if [[ -z "$response" ]]; then
+  echo "Empty response from server." >&2
+  exit 1
+fi
+
 content="$(
-  printf '%s' "$response" | python3 - <<'PY'
-import json,sys
-data=json.load(sys.stdin)
+  COMMIT_RESPONSE="$response" \
+  python3 -c '
+import json,os,sys
+raw=os.environ.get("COMMIT_RESPONSE","")
+if not raw.strip():
+  sys.stderr.write("Empty response from server.\n")
+  sys.exit(1)
+try:
+  data=json.loads(raw)
+except Exception:
+  sys.stderr.write("Invalid JSON response\n")
+  sys.exit(1)
+if "error" in data:
+  sys.stderr.write(data["error"].get("message","Server error") + "\n")
+  sys.exit(1)
 print(data["choices"][0]["message"]["content"])
-PY
-)"
+'
+)" || {
+  echo "Failed to parse server response as JSON." >&2
+  echo "Server response:" >&2
+  echo "$response" >&2
+  exit 1
+}
 
 summary_and_message="$(
-  printf '%s' "$content" | python3 - <<'PY'
-import json,sys
-data=json.load(sys.stdin)
+  COMMIT_CONTENT="$content" \
+  python3 -c '
+import json,os,sys
+raw=os.environ.get("COMMIT_CONTENT","")
+if not raw.strip():
+  sys.stderr.write("Empty content from model.\n")
+  sys.exit(1)
+try:
+  data=json.loads(raw)
+except Exception:
+  sys.stderr.write("Model output is not JSON.\n")
+  sys.exit(1)
 summary=data.get("summary","").strip()
 message=data.get("message","").strip()
 if message.endswith("."):
@@ -163,12 +219,25 @@ if message.endswith("."):
 print(summary)
 print("<<<SPLIT>>>")
 print(message)
-PY
+'
 )"
 
 summary="${summary_and_message%%$'\n<<<SPLIT>>>'*}"
 message="${summary_and_message##*$'\n<<<SPLIT>>>'}"
+final_message="${commit_type}(${jira}): ${message}"
 
 echo "Summary ($diff_scope): $summary"
 echo "Commit message:"
-echo "${commit_type}(${jira}): ${message}"
+echo "$final_message"
+
+if [[ "$diff_scope" == "unstaged" ]]; then
+  read -r -p "No staged changes. Stage all and commit? [y/N]: " confirm_stage
+  if [[ "$confirm_stage" =~ ^[Yy]$ ]]; then
+    git add -A
+  else
+    echo "Aborted: no staged changes to commit." >&2
+    exit 1
+  fi
+fi
+
+git commit -m "$final_message"
