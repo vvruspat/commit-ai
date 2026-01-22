@@ -61,6 +61,8 @@ if [[ -n "$rc_file" ]]; then
 fi
 
 echo "Installed symlink to $bin_dir/commit-ai"
+ln -sf "$(pwd)/commit-ai" "$bin_dir/cai"
+echo "Installed alias symlink to $bin_dir/cai"
 if [[ -n "$rc_file" ]]; then
   echo "Added $bin_dir to PATH in $rc_file (restart your shell)."
 else
