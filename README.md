@@ -41,6 +41,24 @@ Optional type flag:
 ./commit-ai -t fix
 ```
 
+Stage and commit in one go:
+
+```
+./commit-ai -a
+```
+
+Commit and push to current branch:
+
+```
+./commit-ai -p
+```
+
+Stage, commit, and push:
+
+```
+./commit-ai -a -p
+```
+
 If you prefer, you can add this folder to your PATH and run `commit-ai`
 anywhere.
 
