@@ -256,6 +256,7 @@ print(message)
 
 summary="${summary_and_message%%$'\n<<<SPLIT>>>'*}"
 message="${summary_and_message##*$'\n<<<SPLIT>>>'}"
+message="$(printf '%s' "$message" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 if [[ -n "$message" ]]; then
   first_char="${message:0:1}"
   rest="${message:1}"
