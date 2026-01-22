@@ -3,12 +3,14 @@ set -euo pipefail
 
 show_help() {
   cat <<'EOF'
-Usage: commit-ai [-t TYPE]
+Usage: commit-ai [-t TYPE] [-a] [-p]
 
 Summarize current changes with AI and generate a commit message.
 
 Options:
   -t, --type   Commit type: fix, chore, feature
+  -a, --add    Run git add . before committing
+  -p, --push   Push to current branch after commit
   -h, --help   Show this help
 
 Config (~/.commitrc):
@@ -20,11 +22,21 @@ EOF
 }
 
 commit_type=""
+do_add=false
+do_push=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -t|--type)
       commit_type="${2:-}"
       shift 2
+      ;;
+    -a|--add)
+      do_add=true
+      shift
+      ;;
+    -p|--push)
+      do_push=true
+      shift
       ;;
     -h|--help)
       show_help
@@ -79,6 +91,16 @@ fi
 if [[ -z "$diff" ]]; then
   echo "No changes found (staged or unstaged)." >&2
   exit 1
+fi
+
+if $do_add; then
+  git add .
+  diff="$(git diff --cached)"
+  diff_scope="staged"
+  if [[ -z "$diff" ]]; then
+    echo "No changes found after git add ." >&2
+    exit 1
+  fi
 fi
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
@@ -251,3 +273,8 @@ if [[ "$diff_scope" == "unstaged" ]]; then
 fi
 
 git commit -m "$final_message"
+
+if $do_push; then
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  git push origin "$branch"
+fi
