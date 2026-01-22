@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: commit-ai [-t TYPE]
+
+Summarize current changes with AI and generate a commit message.
+
+Options:
+  -t, --type   Commit type: fix, chore, feature
+  -h, --help   Show this help
+
+Config (~/.commitrc):
+  COMMIT_SERVER="https://api.openai.com"
+  COMMIT_MODEL="gpt-4o-mini"
+  COMMIT_API_KEY="..."
+  COMMIT_AUTH_HEADER="Authorization: Bearer ..."
+EOF
+}
+
+commit_type=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -t|--type)
+      commit_type="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      show_help
+      exit 1
+      ;;
+  esac
+done
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "Not a git repository." >&2
+  exit 1
+fi
+
+if [[ ! -f "$HOME/.commitrc" ]]; then
+  echo "Missing config: $HOME/.commitrc" >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$HOME/.commitrc"
+
+server="${COMMIT_SERVER:-}"
+model="${COMMIT_MODEL:-}"
+api_key="${COMMIT_API_KEY:-}"
+auth_header="${COMMIT_AUTH_HEADER:-}"
+
+if [[ -z "$server" || -z "$model" ]]; then
+  echo "COMMIT_SERVER and COMMIT_MODEL must be set in ~/.commitrc" >&2
+  exit 1
+fi
+
+if [[ -z "$auth_header" ]]; then
+  if [[ -z "$api_key" ]]; then
+    echo "COMMIT_API_KEY or COMMIT_AUTH_HEADER must be set in ~/.commitrc" >&2
+    exit 1
+  fi
+  auth_header="Authorization: Bearer $api_key"
+fi
+
+diff="$(git diff --cached)"
+diff_scope="staged"
+if [[ -z "$diff" ]]; then
+  diff="$(git diff)"
+  diff_scope="unstaged"
+fi
+
+if [[ -z "$diff" ]]; then
+  echo "No changes found (staged or unstaged)." >&2
+  exit 1
+fi
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+jira="$(echo "$branch" | grep -Eo '[A-Z]+-[0-9]+' | head -n 1 || true)"
+if [[ -z "$jira" ]]; then
+  read -r -p "Jira key (e.g. COOL-1234): " jira
+fi
+
+if [[ -z "$commit_type" ]]; then
+  read -r -p "Type (fix/chore/feature): " commit_type
+fi
+
+case "$commit_type" in
+  fix|chore|feature) ;;
+  *)
+    echo "Invalid type: $commit_type (use fix|chore|feature)" >&2
+    exit 1
+    ;;
+esac
+
+server="${server%/}"
+endpoint="$server/v1/chat/completions"
+
+prompt=$(
+  cat <<'EOF'
+You are generating a concise git commit message and summary.
+Return only JSON in the following format:
+{"summary":"...","message":"..."}
+
+Rules:
+- summary: 1-3 short bullets separated by "; "
+- message: short imperative, max 72 chars, no trailing period
+EOF
+)
+
+payload="$(
+  COMMIT_PROMPT="$prompt" \
+  COMMIT_DIFF="$diff" \
+  COMMIT_MODEL="$model" \
+  COMMIT_SCOPE="$diff_scope" \
+  python3 - <<'PY'
+import json,sys,os
+prompt = os.environ["COMMIT_PROMPT"]
+diff = os.environ["COMMIT_DIFF"]
+model = os.environ["COMMIT_MODEL"]
+scope = os.environ["COMMIT_SCOPE"]
+content = f"{prompt}\n\nChanges ({scope}):\n{diff}"
+print(json.dumps({
+  "model": model,
+  "messages": [
+    {"role": "user", "content": content}
+  ],
+  "temperature": 0.2
+}))
+PY
+)"
+
+response="$(
+  curl -sS \
+    -H "Content-Type: application/json" \
+    -H "$auth_header" \
+    --data-binary "$payload" \
+    "$endpoint"
+)"
+
+content="$(
+  printf '%s' "$response" | python3 - <<'PY'
+import json,sys
+data=json.load(sys.stdin)
+print(data["choices"][0]["message"]["content"])
+PY
+)"
+
+summary_and_message="$(
+  printf '%s' "$content" | python3 - <<'PY'
+import json,sys
+data=json.load(sys.stdin)
+summary=data.get("summary","").strip()
+message=data.get("message","").strip()
+if message.endswith("."):
+  message=message[:-1]
+print(summary)
+print("<<<SPLIT>>>")
+print(message)
+PY
+)"
+
+summary="${summary_and_message%%$'\n<<<SPLIT>>>'*}"
+message="${summary_and_message##*$'\n<<<SPLIT>>>'}"
+
+echo "Summary ($diff_scope): $summary"
+echo "Commit message:"
+echo "${commit_type}(${jira}): ${message}"
