@@ -20,6 +20,7 @@ From this directory:
 
 The installer asks for server URL, model, and API key, then writes `~/.commitrc`.
 It also installs a symlink to `~/.local/bin/commit-ai`.
+It also installs a short alias `cai` to the same location.
 
 One-line install from git:
 
