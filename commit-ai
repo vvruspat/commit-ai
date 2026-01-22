@@ -257,12 +257,19 @@ print(message)
 summary="${summary_and_message%%$'\n<<<SPLIT>>>'*}"
 message="${summary_and_message##*$'\n<<<SPLIT>>>'}"
 message="$(printf '%s' "$message" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-if [[ -n "$message" ]]; then
-  first_char="${message:0:1}"
-  rest="${message:1}"
-  lower_first_char="$(printf '%s' "$first_char" | tr '[:upper:]' '[:lower:]')"
-  message="${lower_first_char}${rest}"
-fi
+message="$(
+  COMMIT_MESSAGE="$message" \
+  python3 -c '
+import os
+msg = os.environ.get("COMMIT_MESSAGE","")
+out = list(msg)
+for i,ch in enumerate(out):
+  if ch.isalpha():
+    out[i] = ch.lower()
+    break
+print("".join(out))
+'
+)"
 final_message="${commit_type}(${jira}): ${message}"
 
 echo "Summary ($diff_scope): $summary"
