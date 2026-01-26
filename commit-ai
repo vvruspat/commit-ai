@@ -93,6 +93,12 @@ if [[ -z "$diff" ]]; then
   exit 1
 fi
 
+max_diff_chars="${COMMIT_MAX_DIFF_CHARS:-60000}"
+if [[ ${#diff} -gt $max_diff_chars ]]; then
+  diff="${diff:0:$max_diff_chars}"
+  diff="${diff}\n\n[diff truncated to ${max_diff_chars} chars]"
+fi
+
 if $do_add; then
   git add .
   diff="$(git diff --cached)"
