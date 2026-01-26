@@ -1,5 +1,5 @@
 COMMIT_SERVER="https://api.openai.com"
-COMMIT_MODEL="gpt-4o-mini"
+COMMIT_MODEL="gpt-5-mini"
 COMMIT_API_KEY="YOUR_API_KEY"
 # Optional override:
 # COMMIT_AUTH_HEADER="Authorization: Bearer YOUR_API_KEY"
