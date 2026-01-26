@@ -93,11 +93,15 @@ if [[ -z "$diff" ]]; then
   exit 1
 fi
 
-max_diff_chars="${COMMIT_MAX_DIFF_CHARS:-60000}"
-if [[ ${#diff} -gt $max_diff_chars ]]; then
-  diff="${diff:0:$max_diff_chars}"
-  diff="${diff}\n\n[diff truncated to ${max_diff_chars} chars]"
-fi
+truncate_diff() {
+  local max_chars="${COMMIT_MAX_DIFF_CHARS:-60000}"
+  if [[ ${#diff} -gt $max_chars ]]; then
+    diff="${diff:0:$max_chars}"
+    diff="${diff}\n\n[diff truncated to ${max_chars} chars]"
+  fi
+}
+
+truncate_diff
 
 if $do_add; then
   git add .
@@ -107,6 +111,7 @@ if $do_add; then
     echo "No changes found after git add ." >&2
     exit 1
   fi
+  truncate_diff
 fi
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
