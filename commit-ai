@@ -8,7 +8,7 @@ Usage: commit-ai [-t TYPE] [-a] [-p]
 Summarize current changes with AI and generate a commit message.
 
 Options:
-  -t, --type   Commit type: fix, chore, feature
+  -t, --type   Commit type: fix, chore, feat
   -a, --add    Run git add . before committing
   -p, --push   Push to current branch after commit
   -h, --help   Show this help
@@ -67,6 +67,7 @@ server="${COMMIT_SERVER:-}"
 model="${COMMIT_MODEL:-}"
 api_key="${COMMIT_API_KEY:-}"
 auth_header="${COMMIT_AUTH_HEADER:-}"
+require_jira="${COMMIT_REQUIRE_JIRA:-true}"
 
 if [[ -z "$server" || -z "$model" ]]; then
   echo "COMMIT_SERVER and COMMIT_MODEL must be set in ~/.commitrc" >&2
@@ -115,19 +116,23 @@ if $do_add; then
 fi
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
-jira="$(echo "$branch" | grep -Eo '[A-Z]+-[0-9]+' | head -n 1 || true)"
+jira="$(echo "$branch" | grep -Eo '[A-Za-z]+-[0-9]+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)"
 if [[ -z "$jira" ]]; then
-  while [[ -z "$jira" ]]; do
-    read -r -p "Jira key (e.g. COOL-1234): " jira
-  done
+  if [[ "$require_jira" == "true" ]]; then
+    while [[ -z "$jira" ]]; do
+      read -r -p "Jira key (e.g. COOL-1234): " jira
+    done
+  else
+    read -r -p "Jira key (optional, press Enter to skip): " jira
+  fi
 fi
 
 if [[ -z "$commit_type" ]]; then
   echo "Select type:"
   PS3="Type number: "
-  select choice in fix chore feature custom; do
+  select choice in fix chore feat custom; do
     case "${choice:-}" in
-      fix|chore|feature)
+      fix|chore|feat)
         commit_type="$choice"
         break
         ;;
@@ -143,7 +148,7 @@ if [[ -z "$commit_type" ]]; then
 fi
 
 case "$commit_type" in
-  fix|chore|feature) ;;
+  fix|chore|feat) ;;
   *)
     if [[ -z "$commit_type" ]]; then
       echo "Invalid type: empty value" >&2
@@ -280,7 +285,11 @@ for i,ch in enumerate(out):
 print("".join(out))
 '
 )"
-final_message="${commit_type}(${jira}): ${message}"
+if [[ -n "$jira" ]]; then
+  final_message="${commit_type}(${jira}): ${message}"
+else
+  final_message="${commit_type}: ${message}"
+fi
 
 echo "Summary ($diff_scope): $summary"
 echo "Commit message:"

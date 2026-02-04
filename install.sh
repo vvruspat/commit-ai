@@ -29,15 +29,34 @@ else
         ;;
     esac
   done
+  echo "Require Jira key in commit message?"
+  PS3="Choice number: "
+  select choice in yes no; do
+    case "${choice:-}" in
+      yes)
+        require_jira="true"
+        break
+        ;;
+      no)
+        require_jira="false"
+        break
+        ;;
+      *)
+        echo "Invalid selection."
+        ;;
+    esac
+  done
   read -r -p "API key: " api_key
 
   server="${server:-$default_server}"
   model="${model:-$default_model}"
+  require_jira="${require_jira:-true}"
 
   cat > "$rc_path" <<EOF
 COMMIT_SERVER="$server"
 COMMIT_MODEL="$model"
 COMMIT_API_KEY="$api_key"
+COMMIT_REQUIRE_JIRA="$require_jira"
 EOF
   chmod 600 "$rc_path"
   echo "Wrote config to $rc_path"

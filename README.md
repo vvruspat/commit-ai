@@ -71,6 +71,7 @@ anywhere.
 COMMIT_SERVER="https://api.openai.com"
 COMMIT_MODEL="gpt-4o-mini"
 COMMIT_API_KEY="..."
+COMMIT_REQUIRE_JIRA="true"
 ```
 
 You can also set `COMMIT_AUTH_HEADER` if your server uses a custom header.
